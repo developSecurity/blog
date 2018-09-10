@@ -1,100 +1,79 @@
-let postId = 1; 
+const Post = require('models/post');
+const { ObjectId } = require('mongoose').Types;
 
-const posts = [
-    {
-        id: 1,
-        title: '제목',
-        body: '내용'
-    }
-];
-
-exports.write = (ctx) => {
-    const {
-        title,
-        body
-    } = ctx.request.body;
-
-    postId += 1;
-
-    const post = { id: postId, title, body };
-    posts.push(post);
-    ctx.body = post;
-};
-
-exports.list = (ctx) => {
-    ctx.body = posts;
-};
-
-exports.read = (ctx) => {
+exports.checkObjectId = (ctx, next) => {
     const { id } = ctx.params;
 
-    const post = posts.find(p => p.id.toString() === id );
-
-    if(!post) {
-        ctx.status = 404;
-        ctx.body = {
-            message: '포스트가 존재하지 않습니다.'
-        };
-        return;
+    if(!ObjectId.isValid(id)) {
+        ctx.status = 400;
+        return null;
     }
 
-    ctx.body = post;
+    return next();
 };
 
-exports.remove = (ctx) => {
-    const { id } = ctx.params;
-
-    const index = posts.findIndex(p => p.id.toString() === id);
-
-    if(index === -1) {
-        ctx.status = 404;
-        ctx.body = {
-            message: '포스트가 존재하지 않습니다.'
-        };
-        return;
-    }
-
-    posts.splice(index, 1);
-    ctx.status = 204;
-};
-
-exports.replace = (ctx) => {
-    const { id } = ctx.params;
-
-    const index = posts.findIndex(p => p.id.toString() === id);
-
-    if(index === -1) {
-        ctx.status = 404;
-        ctx.body = {
-            message: '포스트가 존재하지 않습니다.'
+exports.write = async (ctx) => {
+    const { title, body, tags } = ctx.request.body;
     
-        };
-        return;
-    }
+    const post = new Post({
+        title, body, tags
+    });
 
-    posts[index] = {
-        id,
-        ...ctx.request.body
-    };
-    ctx.body = posts[index];
+    try {
+        await post.save(); //데이터베이스에 등록합니다.
+        ctx.body = post; // 저장된 결과를 반환합니다.
+    } catch(e) {
+        //데이터베이스의 오류가 발생합니다.
+        ctx.throw(e, 500);
+    }
 };
 
-exports.update = (ctx) => {
-    const { id } = ctx.params;
-
-    const index = posts.findIndex(p => p.id.toString() === id);
-
-    if(index === -1) {
-        ctx.status = 404;
-        ctx.body = {
-            message: '포스트가 존재하지 않습니다.'
-        };
-        return;
+exports.list = async(ctx) => {
+    try{
+        const posts = await Post.find().exec();
+        ctx.body = posts;
+    } catch(e) {
+        ctx.throw(e, 500);
     }
+};
 
-    posts[index] = {
-        ...posts[index],
-        ...ctx.request.body
-    };
-    ctx.body = posts[index];
+exports.read = async(ctx) => {
+    const { id } = ctx.params;
+    try {
+        const post = await Post.findById(id).exec();
+        if(!post) {
+            ctx.status = 404;
+            return;
+        }
+        ctx.body = post;
+    } catch(e) {
+        ctx.throw(e, 500);
+    }
+};
+
+exports.remove = async (ctx) => {
+    const { id } = ctx.params;
+    try {
+        await Post.findByIdAndRemove(id).exec();
+        ctx.status = 204;
+    } catch(e) {
+        ctx.throw(e, 500);
+    }
+};
+
+exports.update = async (ctx) => {
+    const { id } = ctx.params;
+    try {
+        const post = await Post.findByIdAndUpdate(id, ctx.request.body, {
+            new: true
+
+        }).exec();
+        if(!post) {
+            ctx.status = 404;
+            return;
+        }
+        ctx.body = post;
+    } catch(e) {
+        ctx.throw(e, 500);
+    }
 };
